@@ -67,6 +67,7 @@ python test_throughput.py --cf tasks/configs/wikitext_ppl/llama/share2/share_lla
 This codebase contains basis sharing version compression and if you want to run basis sharing, just to modify the llama.py, group.py and model_factory.py. This codebase may not be the final version and we will keeping updating it.
 
 ## Reference
+```
 @misc{mi2025layerwisedynamicrankcompressing,
       title={Layer-wise dynamic rank for compressing large language models}, 
       author={Zhendong Mi and Bian Sun and Grace Li Zhang and Shaoyi Huang},
@@ -76,5 +77,5 @@ This codebase contains basis sharing version compression and if you want to run 
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2509.25622}, 
 }
-
+```
 For any correspondance, email us at shuang59@stevens.edu
