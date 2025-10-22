@@ -241,175 +241,6 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
     
     return all_k_lists
 
-
-def reallocate_budget_by_eff_rank(model_config, v_s_list, tax_rate=0.10, min_k=1, max_rank=4096):
-
-    print("\n" + "="*50)
-    print("Executing Effective-Rank-based K-value Budget Reallocation (Q,K -> V)...")
-
-    # 检查所需信息是否存在
-    if not all(hasattr(model_config, f"dynamic_basis_{p}_proj") for p in ['q', 'k', 'v']):
-        print("  Skipping reallocation: Q, K, or V k_list not found in config.")
-        return model_config
-
-    # --- 1. 从Q和K征税 (与之前相同) ---
-    q_k_list = getattr(model_config, "dynamic_basis_q_proj")
-    k_k_list = getattr(model_config, "dynamic_basis_k_proj")
-    
-    total_k_subsidy = 0 # 这是我们征收到的k值总数
-    
-    # (此处的征税逻辑与之前完全相同，此处省略)
-    
-    new_q_k_list = []
-    for k_val in q_k_list:
-        tax = int(round(k_val * tax_rate))
-        new_k = max(min_k, k_val - tax)
-        total_k_subsidy += (k_val - new_k)
-        new_q_k_list.append(new_k)
-    setattr(model_config, "dynamic_basis_q_proj", new_q_k_list)
-    print(f"  New Q k_list after tax: {new_q_k_list}")
-
-    new_k_k_list = []
-    for k_val in k_k_list:
-        tax = int(round(k_val * tax_rate))
-        new_k = max(min_k, k_val - tax)
-        total_k_subsidy += (k_val - new_k)
-        new_k_k_list.append(new_k)
-    setattr(model_config, "dynamic_basis_k_proj", new_k_k_list)
-    print(f"  New K k_list after tax: {new_k_k_list}")
-    print(f"  Total k-value subsidy collected: {total_k_subsidy}")
-    
-    # --- 2. 将税收（补贴）按有效秩比例分配给V ---
-    v_k_list = list(getattr(model_config, "dynamic_basis_v_proj"))
-    print(f"  Initial V k_list: {v_k_list}")
-    
-    temp_v_k_list = list(v_k_list)
-    if total_k_subsidy > 0 and len(v_s_list) == len(v_k_list):
-        total_effective_rank = sum(v_s_list)
-        if total_effective_rank > 0:
-            subsidies = [int(round(total_k_subsidy * (s / total_effective_rank))) for s in v_s_list]
-            # 处理取整误差
-            remainder = total_k_subsidy - sum(subsidies)
-            if remainder > 0:
-                sorted_indices = sorted(range(len(v_s_list)), key=lambda i: v_s_list[i], reverse=True)
-                for i in range(remainder):
-                    subsidies[sorted_indices[i]] += 1
-            # 应用补贴
-            temp_v_k_list = [k + s for k, s in zip(v_k_list, subsidies)]
-    
-    print(f"  V k_list after initial proportional subsidy: {temp_v_k_list}")
-
-    # --- 3. 修正与溢出：检查超限，收集溢出，重新分配 ---
-    spillover_pool = 0
-    final_v_k_list = [0] * len(v_k_list)
-
-    # 第一轮修正：找出超限的组，把k值设为上限，并收集溢出的补贴
-    for i in range(len(temp_v_k_list)):
-        if temp_v_k_list[i] > max_rank:
-            spillover_pool += (temp_v_k_list[i] - max_rank)
-            final_v_k_list[i] = max_rank
-        else:
-            final_v_k_list[i] = temp_v_k_list[i]
-    
-    print(f"  K-values collected from spillover: {spillover_pool}")
-
-    # 第二轮修正：将溢出的补贴，贪心地分配给其他尚未满额的组
-    if spillover_pool > 0:
-        for _ in range(spillover_pool):
-            best_group_idx = -1
-            max_sensitivity = -1
-            # 寻找最佳候选人
-            for i in range(len(final_v_k_list)):
-                if final_v_k_list[i] < max_rank: # 必须是尚未满额的组
-                    if v_s_list[i] > max_sensitivity:
-                        max_sensitivity = v_s_list[i]
-                        best_group_idx = i
-            
-            # 分配+1k
-            if best_group_idx != -1:
-                final_v_k_list[best_group_idx] += 1
-            else:
-                break # 所有组都满了
-
-    setattr(model_config, "dynamic_basis_v_proj", final_v_k_list)
-    print(f"  Final V k_list after spillover reallocation: {final_v_k_list}")
-    print("="*50 + "\n")
-    
-    return model_config
-
-
-def reallocate_budget_by_loss(model_config, v_singular_values_list, tax_rate=0.10, min_k=1):
-
-    print("\n" + "="*50)
-    print("Executing Loss-Aware K-value Budget Reallocation (Q,K -> V)...")
-
-    # 检查所需信息是否存在
-    if not all(hasattr(model_config, f"dynamic_basis_{p}_proj") for p in ['q', 'k', 'v']):
-        print("  Skipping reallocation: Q, K, or V k_list not found in config.")
-        return model_config
-
-    # --- 1. 从Q和K征税 (与之前相同) ---
-    q_k_list = getattr(model_config, "dynamic_basis_q_proj")
-    k_k_list = getattr(model_config, "dynamic_basis_k_proj")
-    
-    total_k_subsidy = 0 # 这是我们征收到的k值总数
-    
-    new_q_k_list = []
-    for k_val in q_k_list:
-        tax = int(round(k_val * tax_rate))
-        new_k = max(min_k, k_val - tax)
-        total_k_subsidy += (k_val - new_k)
-        new_q_k_list.append(new_k)
-    setattr(model_config, "dynamic_basis_q_proj", new_q_k_list)
-    print(f"  New Q k_list after tax: {new_q_k_list}")
-
-    new_k_k_list = []
-    for k_val in k_k_list:
-        tax = int(round(k_val * tax_rate))
-        new_k = max(min_k, k_val - tax)
-        total_k_subsidy += (k_val - new_k)
-        new_k_k_list.append(new_k)
-    setattr(model_config, "dynamic_basis_k_proj", new_k_k_list)
-    print(f"  New K k_list after tax: {new_k_k_list}")
-    print(f"  Total k-value subsidy collected: {total_k_subsidy}")
-
-    # --- 2. 将税收（补贴）智能地分配给V ---
-    v_k_list = list(getattr(model_config, "dynamic_basis_v_proj"))
-    print(f"  Initial V k_list: {v_k_list}")
-
-    # 贪心循环：我们有 total_k_subsidy 次“k+1”的机会
-    for _ in range(total_k_subsidy):
-        best_group_idx = -1
-        max_error_reduction = -1
-        
-        # 遍历所有V的层组，找到那个增加1个k值“收益”最大的组
-        for i in range(len(v_k_list)):
-            current_k = v_k_list[i]
-            group_svs = v_singular_values_list[i]
-            
-            # 确保还有奇异值可以“恢复”
-            if current_k < len(group_svs):
-                # 恢复下一个奇异值能带来的误差降低量，就是这个奇异值的平方
-                error_reduction = group_svs[current_k].pow(2).item()
-                if error_reduction > max_error_reduction:
-                    max_error_reduction = error_reduction
-                    best_group_idx = i
-        
-        # 如果找到了最佳的组，就给它的k值加1
-        if best_group_idx != -1:
-            v_k_list[best_group_idx] += 1
-        else:
-            # 如果所有组都已经达到最大秩，无法再增加，则提前退出
-            print("  Warning: All V-groups are at max rank, cannot allocate further subsidy.")
-            break
-            
-    setattr(model_config, "dynamic_basis_v_proj", v_k_list)
-    print(f"  Final V k_list after loss-aware subsidy: {v_k_list}")
-    print("="*50 + "\n")
-    
-    return model_config
-
-
 def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
 
     print("\n" + "="*80)
@@ -534,52 +365,6 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
 
 
 
-
-def calculate_individual_saliency_scores(std_model, model_type, group, original_module_name, calib_module_name, calib_path):
-    """
-    这是一个新的辅助函数，用于实现您的新思路。
-    它负责为一个层组计算出【每一个奇异值】的【独立重要性分数】。
-    
-    返回:
-        saliency_scores (list): 包含该组每个奇异值重要性分数的列表。
-        svd_results (dict): 包含 U, S, V 矩阵，供后续使用。
-    """
-    s, _ = Calib.get_s_inv_s(group, calib_module_name, model_type, calib_path)
-    
-    # 根据模型类型提取原始权重
-    if model_type == 'llama2':
-        w_cat = _get_llama2_weights(std_model, group, original_module_name)
-    # (您可以添加对其他模型类型的支持)
-    else:
-        raise NotImplementedError(f"Weight extraction for {model_type} not implemented.")
-
-    # 确保设备和类型正确
-    s = s.to(w_cat.device, dtype=torch.float32)
-    w_cat = w_cat.float()
-    
-    # 对【原始】权重 W_cat 进行SVD分解
-    try:
-        u, singular_values, v_t = torch.linalg.svd(w_cat)
-    except torch.linalg.LinAlgError:
-        # svd_lowrank 或 torch.svd 作为备选
-        u, singular_values, v_t = torch.svd(w_cat)
-        
-    saliency_scores = []
-    # 遍历每一个奇异值，计算其精确的重要性分数
-    for i in range(len(singular_values)):
-        sigma_i = singular_values[i]
-        u_i = u[:, i]
-        
-        # 正确的理论公式: ΔL ∝ σ_i^2 * (u_i^T * s * u_i)
-        hessian_interaction = u_i.T @ s @ u_i
-        score = (sigma_i.pow(2) * hessian_interaction).item()
-        saliency_scores.append(score)
-
-    svd_results = {'u': u, 's': singular_values, 'v_t': v_t}
-    
-    return saliency_scores, svd_results
-
-
 # --- 步骤1: 增加权重提取的辅助函数 ---
 # (这部分逻辑借鉴自 group.py，以避免循环导入)
 def _get_llama2_weights(std_model, group_member, name):
@@ -617,86 +402,6 @@ def _get_mistral_weights(std_model, group_member, name):
         w.append(data.T)
     return torch.cat(w, dim=-1)
 
-
-
-def calculate_saliency_and_svd(std_model, model_type, group, name, calib_path):
-    """
-    # --- 这是更贴近SVD-LLM V2理论的“高级版”函数 ---
-    它为每个奇异值计算一个更精细的重要性分数，
-    这个分数同时考虑了奇异值的大小和其向量与Hessian的相互作用。
-    """
-    s, _ = Calib.get_s_inv_s(group, name, model_type, calib_path)
-    w_cat = _get_llama2_weights(std_model, group, name) 
-
-    s = s.to(w_cat.device, dtype=torch.float32)
-    w_cat = w_cat.float()
-    
-    # 注意：为了更严格地遵循理论，我们应该对原始权重 W 进行SVD
-    # 而不是对 SW 进行SVD。
-    try:
-        u, singular_values, v_t = torch.linalg.svd(w_cat)
-        v = v_t.T # linalg.svd 返回的是 v.T
-    except torch.linalg.LinAlgError:
-        u, singular_values, v = torch.svd(w_cat)
-
-    saliency_scores = []
-    # 遍历每一个奇异值
-    for i in range(len(singular_values)):
-        sigma_i = singular_values[i]
-        u_i = u[:, i] # 获取右奇异向量
-        
-        # --- 核心公式 ---
-        # 计算损失变化 ΔL，这正比于 σ_i^2 * (v_i^T * H * v_i)
-        # 这个公式衡量了奇异值能量与其对应方向在Hessian下的敏感度的乘积
-        # v_i.T @ s @ v_i 是一个标量，代表了Hessian在v_i方向上的投影
-        hessian_interaction = u_i.T @ s @ u_i
-        
-        # 将单个奇异值的“能量”与其“敏感度”相乘
-        score = (sigma_i.pow(2) * hessian_interaction).item()
-        saliency_scores.append(score)
-
-    # 宏观指标：将所有微观重要性分数求和
-    group_saliency = sum(saliency_scores)
-    
-    return group_saliency, singular_values
-
-
-
-# ---编写新的、基于SW的敏感度计算函数 ---
-def compute_group_sensitivity_sw(std_model, model_type, group, name, calib_path, niter=4, q=768):
-    """
-    用加权SVD (SVD on SW) 的奇异值谱来计算敏感度 (有效秩)。
-    """
-    # 1. 获取缩放矩阵 S (来自输入激活 X)
-    s, _ = Calib.get_s_inv_s(group, name, model_type, calib_path)
-    
-    # 2. 获取原始权重 W
-    if model_type == 'gpt2':
-        w_cat = _get_gpt2_weights(std_model, group, name)
-    elif model_type == 'llama2':
-        w_cat = _get_llama2_weights(std_model, group, name)
-    elif model_type == 'opt':
-        w_cat = _get_opt_weights(std_model, group, name)
-    elif model_type == 'mistral':
-        w_cat = _get_mistral_weights(std_model, group, name)
-    else:
-        raise NotImplementedError
-
-    # 3. 计算 SW
-    s = s.to(w_cat.device, dtype=torch.float32)
-    w_cat = w_cat.float()
-    sw = s @ w_cat
-    
-    # 4. 对 SW 进行SVD低秩分解，获取奇异值
-    sig = torch.linalg.svdvals(sw)
-    #_, S_sw, _ = torch.svd_lowrank(sw, niter=niter, q=q)
-
-    lam =sig.pow(2)
-
-    # 5. 根据 SW 的奇异值计算有效秩
-    p = lam / (lam.sum() + 1e-12)
-    reff = float(torch.exp(-(p * torch.log(p + 1e-12)).sum()))
-    return reff
 
 
 def get_sensitivity_and_singular_values(std_model, model_type, group, name, calib_path):
@@ -1016,7 +721,18 @@ def create_model(config):
         elif config.model_type == "opt":
             model = ShareOPTForCausalLM.from_pretrained(model_path, device_map='auto')
         elif config.model_type == "mistral":
-            model = ShareMistralForCausalLM.from_pretrained(model_path, device_map='auto')
+            model = ShareMistralForCausalLM.from_pretrained(
+                model_path,
+                config=model_config,
+                k_basis=k_basis,
+                q_basis=q_basis,
+                v_basis=v_basis,
+                o_basis=o_basis,
+                up_basis=up_basis,
+                gate_basis=gate_basis,
+                down_basis=down_basis,
+                device_map='cpu'
+            )
         else:
             raise ValueError
     
@@ -1071,7 +787,7 @@ def create_model(config):
         all_s_lists = {}
 
 
-        ####针对llama3:
+        ####针对llama3 and mistral:
 
         # all_initial_k_lists = {}
         # all_w_lists = {}
