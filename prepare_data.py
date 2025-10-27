@@ -84,24 +84,23 @@ def prep_c4(context_length, tokenizer, dataset_cache_dir=None):
     val_raw_dataset = load_dataset("json", data_dir=dataset_cache_dir, data_files="c4-validation.json")['train']
     test_raw_dataset = val_raw_dataset
 
-    # 2. 【新增】对训练集和验证集进行分词
-    # C4数据集的文本内容在 "text" 字段中
+ 
     func_tokenize = partial(tokenize_func, tokenizer=tokenizer, content="text")
     tokenized_train = train_raw_dataset.map(func_tokenize, num_proc=4, batched=True, remove_columns=train_raw_dataset.column_names)
     tokenized_val = val_raw_dataset.map(func_tokenize, num_proc=4, batched=True, remove_columns=val_raw_dataset.column_names)
 
-    # 3. 【新增】将分词后的文本分组
+ 
     func_group = partial(group_text, context_length=context_length)
     train_dataset = tokenized_train.map(func_group, num_proc=4, batch_size=2048, batched=True)
     val_dataset = tokenized_val.map(func_group, num_proc=4, batch_size=2048, batched=True)
 
-    # 4. 准备测试数据和数据整理器 (这部分逻辑可以保留)
+ 
     test_texts = "\n\n".join(val_raw_dataset['text'][:2000])
     tokenized_test_data = tokenizer(test_texts, return_tensors="pt")
     
     data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False, return_tensors="pt")
     
-    # 5. 返回处理好的、非空的数据集
+
     return train_dataset, val_dataset, tokenized_test_data, data_collator
 
 
