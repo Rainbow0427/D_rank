@@ -429,17 +429,17 @@ logger = logging.get_logger(__name__)
 
 class ShareLlamaSdpaAttention(LlamaSdpaAttention):
     def __init__(self, config: LlamaConfig, layer_idx: int):
-        # 调用父类的__init__来初始化标准组件(如rotary_emb)
+        
         super().__init__(config=config, layer_idx=layer_idx)
 
-        # 辅助函数: 查找当前层所属的分组索引
+  
         def find_group_idx(groups, current_layer_idx):
             for i, group in enumerate(groups):
                 if current_layer_idx in group:
                     return i
             raise ValueError(f"Layer {current_layer_idx} not found in any group.")
 
-        # 根据分组索引，从config中获取动态计算出的k值
+       
         q_group_idx = find_group_idx(config.q_groups, self.layer_idx)
         k_group_idx = find_group_idx(config.k_groups, self.layer_idx)
         v_group_idx = find_group_idx(config.v_groups, self.layer_idx)
@@ -450,7 +450,7 @@ class ShareLlamaSdpaAttention(LlamaSdpaAttention):
         num_basis_v = config.dynamic_basis_v_proj[v_group_idx]
         num_basis_o = config.dynamic_basis_o_proj[o_group_idx]
 
-        # 使用动态k值初始化Coefficient层
+     
         self.q_proj = Coefficient(self.num_heads * self.head_dim, num_basis_q)
         self.k_proj = Coefficient(self.num_key_value_heads * self.head_dim, num_basis_k)
         self.v_proj = Coefficient(self.num_key_value_heads * self.head_dim, num_basis_v)
@@ -462,7 +462,7 @@ class ShareLlamaSdpaAttention(LlamaSdpaAttention):
 
         bsz, q_len, _ = hidden_states.size()
         
-        # 从kwargs中获取顶层传递下来的basis模块
+     
         q_basis = kwargs.get("q_basis")
         k_basis = kwargs.get("k_basis")
         v_basis = kwargs.get("v_basis")
@@ -473,7 +473,7 @@ class ShareLlamaSdpaAttention(LlamaSdpaAttention):
                 if current_layer_idx in group: return i
             raise ValueError(f"Layer {current_layer_idx} not found in any group.")
 
-        # 查找并使用正确的basis模块
+    
         q_group_idx = find_group_idx(self.config.q_groups, self.layer_idx)
         q_group_leader_idx = str(self.config.q_groups[q_group_idx][0])
         q_basis_op = q_basis[q_group_leader_idx]
@@ -490,7 +490,7 @@ class ShareLlamaSdpaAttention(LlamaSdpaAttention):
         key_states = self.k_proj(k_basis_op(hidden_states))
         value_states = self.v_proj(v_basis_op(hidden_states))
 
-        # --- 以下为与 transformers 4.45.1 版本完全同步的官方逻辑 ---
+
         query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
@@ -574,8 +574,7 @@ class ShareLlamaMLP(LlamaMLP):
 
 class ShareLlamaDecoderLayer(LlamaDecoderLayer):
     def __init__(self, config: LlamaConfig, layer_idx: int):
-        # 跳过 LlamaDecoderLayer 的 __init__，直接调用父类 nn.Module 的 __init__
-        # 这样可以避免父类创建我们不需要的标准 Attention 和 MLP 层
+
         super(LlamaDecoderLayer, self).__init__()
         self.hidden_size = config.hidden_size
         self.self_attn = ShareLlamaSdpaAttention(config=config, layer_idx=layer_idx)
@@ -653,7 +652,7 @@ class ShareLlamaModel(LlamaModel):
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
         
-        # 与 4.45.1 版本完全匹配的调用方式
+        
         causal_mask = self._update_causal_mask(attention_mask, inputs_embeds, cache_position, past_key_values, output_attentions)
         
         hidden_states = inputs_embeds
