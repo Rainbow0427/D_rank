@@ -30,7 +30,7 @@ def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k
     print("\n" + "="*80)
     print("Executing V-Maxout by GroupSize Parameter Reallocation (Q,K -> V)...")
 
-    # --- 0. 准备数据 ---
+  
     if not all(key in all_w_lists for key in ['q', 'k', 'v']):
         return all_k_lists
         
@@ -42,7 +42,7 @@ def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k
     q_groups, k_groups, v_groups = getattr(model_config, "q_groups"), getattr(model_config, "k_groups"), getattr(model_config, "v_groups")
     max_rank_q, max_rank_k, max_rank_v = max_ranks['q'], max_ranks['k'], max_ranks['v']
 
-    # --- 1. 计算V模块的总参数“赤字” ---
+
     params_deficit_v = 0
     for i, k_val in enumerate(v_k_list_initial):
         needed_k = max_rank_v - k_val
@@ -52,28 +52,28 @@ def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k
     if params_deficit_v == 0:
         return all_k_lists
 
-    # --- 2. 确定Q和K的募捐目标 (按4:1) ---
+  
     q_target_revenue = params_deficit_v * 0.8
     k_target_revenue = params_deficit_v * 0.2
     
-    # --- 3. 按【分组大小】从Q和K中平均削减k值来“募捐” ---
+    
     params_revenue_q, params_revenue_k = 0, 0
     
-    # 从Q募捐
+    
     total_q_layers = sum(len(g) for g in q_groups)
     if total_q_layers > 0:
-        # 按分组大小，计算每个Q组需要贡献多少参数
+        
         q_revenues_params = [q_target_revenue * (len(g) / total_q_layers) for g in q_groups]
         for i in range(len(q_k_list)):
-            # 将参数换算成需要削减的k值
+    
             k_reduction = int(round(q_revenues_params[i] / q_w_list[i])) if q_w_list[i] > 0 else 0
             original_k = q_k_list[i]
-            # 执行削减
+ 
             q_k_list[i] = max(min_k, original_k - k_reduction)
-            # 记录实际募集到的参数量
+       
             params_revenue_q += (original_k - q_k_list[i]) * q_w_list[i]
 
-    # 从K募捐 (逻辑同上)
+
     total_k_layers = sum(len(g) for g in k_groups)
     if total_k_layers > 0:
         k_revenues_params = [k_target_revenue * (len(g) / total_k_layers) for g in k_groups]
@@ -86,7 +86,7 @@ def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k
     total_revenue = params_revenue_q + params_revenue_k
     print(f"  Collected from Q: {params_revenue_q:.0f}, from K: {params_revenue_k:.0f}. Total collected: {total_revenue:.0f}")
 
-    # --- 4. 将募集到的资金按【分组大小】分配给V，并处理溢出 ---
+
     final_v_k_list = list(v_k_list_initial)
     params_spillover = 0
     
@@ -106,7 +106,7 @@ def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k
     
     print(f"  Parameter spillover collected from V: {params_spillover:.0f}")
 
-    # --- 5. 将【溢出的参数】按【分组大小】退还给Q和K ---
+    
     if params_spillover > 0 and total_revenue > 0:
         q_refund_params = int(round(params_spillover * (params_revenue_q / total_revenue)))
         k_refund_params = params_spillover - q_refund_params
@@ -127,7 +127,7 @@ def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k
                     k_increase = int(round(k_refunds_params[i] / k_w_list[i])) if k_w_list[i] > 0 else 0
                     k_k_list[i] = min(max_rank_k, k_k_list[i] + k_increase)
 
-    # --- 6. 更新并返回k_lists字典 ---
+    
     all_k_lists['q'] = q_k_list
     all_k_lists['k'] = k_k_list
     all_k_lists['v'] = final_v_k_list
@@ -145,9 +145,9 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
     print("\n" + "="*80)
     print("Executing Final, Simplified Parameter Reallocation (by Group Size)...")
 
-    # --- 0. 准备数据 ---
+   
     if not all(key in all_w_lists for key in ['q', 'k', 'v']):
-        return all_k_lists # 直接返回未修改的k_lists
+        return all_k_lists
         
     q_k_list_initial = list(all_k_lists['q'])
     k_k_list_initial = list(all_k_lists['k'])
@@ -156,7 +156,7 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
     q_w_list, k_w_list, v_w_list = all_w_lists['q'], all_w_lists['k'], all_w_lists['v']
     q_groups, k_groups, v_groups = getattr(model_config, "q_groups"), getattr(model_config, "k_groups"), getattr(model_config, "v_groups")
 
-    # --- 1. 按【参数量】从Q和K征税 ---
+    
     params_revenue_q, params_revenue_k = 0, 0
     new_q_k_list = list(q_k_list_initial)
     for i, k_val in enumerate(q_k_list_initial):
@@ -175,17 +175,17 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
     total_params_subsidy = params_revenue_q + params_revenue_k
     print(f"  Parameter revenue collected: {total_params_subsidy:.0f}")
 
-    # --- 2. 按【分组大小】将参数补贴分配给V，并计算溢出 ---
+  
     final_v_k_list = list(v_k_list_initial)
     params_spillover = 0
     max_rank_v = max_ranks.get('v', 1024) # 获取v的max_rank
     if total_params_subsidy > 0:
         total_layers_in_v = sum(len(g) for g in v_groups)
         if total_layers_in_v > 0:
-            # 2a. 初步分配参数预算
+            
             v_subsidies_params = [total_params_subsidy * (len(g) / total_layers_in_v) for g in v_groups]
             
-            # 2b. 应用补贴，检查溢出，并收集
+           
             for i in range(len(v_k_list_initial)):
                 cost_per_rank = v_w_list[i]
                 k_increase = int(round(v_subsidies_params[i] / cost_per_rank))
@@ -200,12 +200,12 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
     
     print(f"  Parameter spillover collected from V: {params_spillover:.0f}")
 
-    # --- 3. 将【溢出的参数】按【分组大小】退还给Q和K ---
+  
     if params_spillover > 0 and total_params_subsidy > 0:
         q_refund_params = int(round(params_spillover * (params_revenue_q / total_params_subsidy)))
         k_refund_params = params_spillover - q_refund_params
         
-        # 退还给 Q
+ 
         max_rank_q = max_ranks.get('q', 4096)
         if q_refund_params > 0:
             total_q_layers = sum(len(g) for g in q_groups)
@@ -215,7 +215,7 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
                     k_increase = int(round(q_refunds_params[i] / q_w_list[i]))
                     new_q_k_list[i] = min(max_rank_q, new_q_k_list[i] + k_increase)
 
-        # 退还给 K (逻辑同上)
+  
         max_rank_k = max_ranks.get('k', 1024)
         if k_refund_params > 0:
             total_k_layers = sum(len(g) for g in k_groups)
@@ -225,7 +225,7 @@ def reallocate_llama3(model_config, all_w_lists, all_k_lists, max_ranks, tax_rat
                     k_increase = int(round(k_refunds_params[i] / k_w_list[i]))
                     new_k_k_list[i] = min(max_rank_k, new_k_k_list[i] + k_increase)
 
-    # --- 4. 更新最终的k_list ---
+  
     setattr(model_config, "dynamic_basis_q_proj", new_q_k_list)
     setattr(model_config, "dynamic_basis_k_proj", new_k_k_list)
     setattr(model_config, "dynamic_basis_v_proj", final_v_k_list)
@@ -250,7 +250,7 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
         print("  Skipping reallocation: Required k_lists not found in config.")
         return model_config
         
-    # --- 1. 从Q和K征税，并【分开】记录税收额 ---
+
     q_k_list_initial = list(getattr(model_config, "dynamic_basis_q_proj"))
     k_k_list_initial = list(getattr(model_config, "dynamic_basis_k_proj"))
     
@@ -274,12 +274,12 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
     total_tax_revenue = q_tax_revenue + k_tax_revenue
     print(f"  Tax collected from Q: {q_tax_revenue}, from K: {k_tax_revenue}. Total subsidy pool: {total_tax_revenue}")
 
-    # --- 2. 将补贴分配给V，并处理溢出 ---
+   
     v_k_list_initial = list(getattr(model_config, "dynamic_basis_v_proj"))
     v_groups = getattr(model_config, "v_groups")
     print(f"  Initial V k_list: {v_k_list_initial}")
     
-    # 2a. 按分组大小，初步分配补贴
+
     temp_v_k_list = list(v_k_list_initial)
     if total_tax_revenue > 0:
         total_layers_in_v = sum(len(g) for g in v_groups)
@@ -290,7 +290,7 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
             if remainder > 0:
                 for i in range(remainder): temp_v_k_list[i % len(temp_v_k_list)] += 1
     
-    # 2b. 处理溢出
+
     spillover_pool = 0
     final_v_k_list = [0] * len(v_k_list_initial)
     for i in range(len(temp_v_k_list)):
@@ -313,18 +313,18 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
                 final_v_k_list[best_group_idx] += 1
             else: break 
     
-    # --- 3. 计算V没用完的“退款” ---
+
     v_subsidy_used = sum(final_v_k_list) - sum(v_k_list_initial)
     refund_amount = total_tax_revenue - v_subsidy_used
     print(f"  V module actually used {v_subsidy_used} k-values. Final V k_list: {final_v_k_list}")
     print(f"  Refund amount to be returned to Q & K: {refund_amount}")
 
-    # --- 4. 将“退款”按比例、普惠地退还给Q和K ---
+
     if refund_amount > 0:
         if total_tax_revenue > 0:
             q_refund_share = int(round(refund_amount * (q_tax_revenue / total_tax_revenue)))
             k_refund_share = refund_amount - q_refund_share
-        else: # 预防除零错误
+        else: 
             q_refund_share = refund_amount // 2
             k_refund_share = refund_amount - q_refund_share
         print(f"  Refunding {q_refund_share} to Q, and {k_refund_share} to K.")
@@ -351,7 +351,7 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
                 for i in range(len(new_k_k_list)):
                     new_k_k_list[i] = min(max_rank, new_k_k_list[i] + k_refunds[i])
 
-    # --- 5. 更新最终的k_list ---
+  
     setattr(model_config, "dynamic_basis_q_proj", new_q_k_list)
     setattr(model_config, "dynamic_basis_k_proj", new_k_k_list)
     setattr(model_config, "dynamic_basis_v_proj", final_v_k_list)
@@ -365,16 +365,15 @@ def reallocate_k_budget(model_config, tax_rate=0.10, min_k=1, max_rank=4096):
 
 
 
-# --- 步骤1: 增加权重提取的辅助函数 ---
-# (这部分逻辑借鉴自 group.py，以避免循环导入)
+
 def _get_llama2_weights(std_model, group_member, name):
     w = []
-    # 定义一个统一的目标设备
+ 
     target_device = 'cuda:0' 
     model = std_model.model.layers
     for layer in group_member:
         data = model[layer].get_submodule(name).weight.data
-        # 在添加进列表前，将张量移动到目标设备
+        
         w.append(data.T.to(target_device))
     return torch.cat(w, dim=-1)
 
@@ -530,10 +529,10 @@ def do_update_model(config, model, dataset, tokenizer, data_collator):
 #         else:
 #             tokenizer = AutoTokenizer.from_pretrained(config.model_name)
 #         #tokenizer.pad_token = "[PAD]"
-#         # 对于Llama系列模型，最佳实践是将pad_token设置为eos_token
+
 #         if tokenizer.pad_token is None:
 #             tokenizer.pad_token = tokenizer.eos_token
-#         # --- 修改结束 ---
+
 #         print("Start create model!")
 #         model_config = AutoConfig.from_pretrained(config.model_name)
 #         model_config.use_cache = False
@@ -666,10 +665,10 @@ def create_model(config):
     if os.path.exists(config.untrained_model_path):
         model_path = config.untrained_model_path
 
-        ###需要加！！！
+
         model_config = AutoConfig.from_pretrained(model_path)
         
-        # 2. 根据config中的信息，重建空的basis模块骨架
+   
         k_basis = build_dynamic_basis_collection(model_config.k_groups, model_config.dynamic_basis_k_proj, model_config.hidden_size)
         q_basis = build_dynamic_basis_collection(model_config.q_groups, model_config.dynamic_basis_q_proj, model_config.hidden_size)
         v_basis = build_dynamic_basis_collection(model_config.v_groups, model_config.dynamic_basis_v_proj, model_config.hidden_size)
@@ -745,7 +744,7 @@ def create_model(config):
             tokenizer = AutoTokenizer.from_pretrained(config.model_name, cache_dir="llm_weights")
         tokenizer.pad_token = "[PAD]"
 
-        #         # 对于Llama系列模型，最佳实践是将pad_token设置为eos_token
+
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
@@ -787,7 +786,7 @@ def create_model(config):
         all_s_lists = {}
 
 
-        ####针对llama3 and mistral:
+        ####for llama3 and mistral:
 
         # all_initial_k_lists = {}
         # all_w_lists = {}
@@ -796,14 +795,14 @@ def create_model(config):
         # all_base_groups = {}
         # max_ranks = {}
 
-        # # --- 步骤 1: 首先，为所有模块计算出初始的动态k值 ---
+    
         # for part in ["share_part", "private_part"]:
         #     names = getattr(config, part)
             
         #     for name in names:
         #         print(f"Calculating initial k_list for {name}...")
                 
-        #         # 获取分组策略
+       
         #         strategy = getattr(config, "grouping_strategy", {}).get(name, "default")
         #         if isinstance(strategy, list):
         #             base_groups = strategy
@@ -861,9 +860,9 @@ def create_model(config):
         #             # protection_floor = int(static_k * 0.99)
         #             # print(f"  Protection floor: {protection_floor}")
 
-        #             #     # 2. 抬高低于下限的k值，并计算总参数“赤字” (params_deficit)
+        #             #     #  (params_deficit)
         #             # params_deficit = 0
-        #             # adjusted_k_list = list(k_list) # 创建一个副本
+        #             # adjusted_k_list = list(k_list) 
         #             # for i, k in enumerate(adjusted_k_list):
         #             #     if k < protection_floor:
         #             #         params_deficit += (protection_floor - k) * w_list[i]
@@ -871,30 +870,30 @@ def create_model(config):
 
         #             # print(f"  Initial parameter deficit after raising floors: {params_deficit}")
 
-        #             #     # 3. 从高于静态k值的“富裕”层中，按比例扣除参数赤字
+     
         #             # if params_deficit > 0:
         #             #     donors = [(i, k) for i, k in enumerate(adjusted_k_list) if k > static_k]
                             
-        #             #         # 计算总的“参数盈余”
+  
         #             #     total_params_surplus = sum((k - static_k) * w_list[i] for i, k in donors)
 
         #             #     if total_params_surplus > 0:
         #             #         print(f"  Found {len(donors)} donor(s) with a total parameter surplus of {total_params_surplus} to cover the deficit.")
                                 
-        #             #             # 按比例扣除
+        
         #             #         for i, k_donor in donors:
         #             #             params_surplus_i = (k_donor - static_k) * w_list[i]
         #             #             params_to_deduct = params_deficit * (params_surplus_i / total_params_surplus)
                                     
-        #             #                 # 将要扣除的参数量转换回k值的减少量
+
         #             #             k_deduction = params_to_deduct / w_list[i]
                                     
-        #             #                 # 扣除，并确保不低于静态k值
+
         #             #             adjusted_k_list[i] = max(static_k, int(round(k_donor - k_deduction)))
         #             #     else:
         #             #         print("  Warning: No donors with surplus found to cover the deficit. Final compression ratio might be lower.")
                         
-        #             # k_list = adjusted_k_list # 使用调整后的k_list
+        #             # k_list = adjusted_k_list 
         #             # print(f"  k_list after reallocation: {k_list}")
         #         else:
         #             if 'gate' in name or 'up' in name or 'down' in name or 'o' in name or 'v' in name or 'k' in name or 'q' in name:
@@ -911,26 +910,24 @@ def create_model(config):
         #         all_P_budgets[name] = P_budget
         #         setattr(model_config, name + "_groups", base_groups)
         
-        # # ================================================================= #
-        # # ==========  步骤 2: 执行您提出的、非对称的跨模块预算重分配  ==========
-        # # ================================================================= #
+
         # print("\n" + "="*50)
         # all_initial_k_lists = reallocate_llama3(model_config, all_w_lists, all_initial_k_lists, max_ranks, tax_rate=0.1, min_k=1)
         # #all_initial_k_lists = reallocate_llama3_2(model_config, all_w_lists, all_initial_k_lists, max_ranks, min_k=1)
         # # ================================================================= #
         
-        # # --- 步骤 3: 为每个模块进行最终的预算微调，以严格保证压缩率 ---
+      
         # for part in ["share_part", "private_part"]:
         #     names = getattr(config, part)
         #     for name in names:
         #         print(f"Finalizing k_list for {name}")
-        #         k_list = all_initial_k_lists[name] # 使用经过重分配的k_list作为起点
+        #         k_list = all_initial_k_lists[name]
         #         w_list = all_w_lists[name]
         #         s_list = all_s_lists[name]
         #         P_budget = all_P_budgets[name]
                 
         #         def total_params(ks): return sum(ki * wi for ki, wi in zip(ks, w_list))
-        #         # 使用while循环来确保预算被精确匹配
+       
         #         for _ in range(len(k_list) * 2):
         #         #while total_params(k_list) != P_budget:
         #             diff = total_params(k_list) - P_budget
@@ -952,14 +949,14 @@ def create_model(config):
         #         print(f"  Final selected k_list for {name}: {k_list}")
 
 
-        #####针对llama1-2
+        ##### for llama1-2
 
         
 
         for part in ["share_part", "private_part"]:
             names = getattr(config, part)
             
-            # --- ここで修正 ---
+            
             if part == "share_part":
                 gs = config.group_size
                 num_group = model_config.num_hidden_layers // gs
@@ -972,7 +969,7 @@ def create_model(config):
                 base_groups = [[i] for i in range(model_config.num_hidden_layers)]
 
                 
-            # --- 修正完了 ---
+           
 
             for name in names:
                 print(f"Config for {name} (Adaptive k selection)")
@@ -990,8 +987,8 @@ def create_model(config):
             #         g, 
             #         getattr(config, name + "_name"), 
             #         config.calib_path,
-            #         config.compression_ratio, # 传入全局压缩率
-            #         nx, nf, len(g) # 传入计算基准k值所需的参数
+            #         config.compression_ratio, 
+            #         nx, nf, len(g) 
             #     ) for g in base_groups
             # ]
                 # ----------------------------------------------
@@ -1004,22 +1001,7 @@ def create_model(config):
                 all_s_lists[name] = s_list
 
 
-                # # === 新增：按域读取层熵，并换算每组的熵权重 m_g ===
-                # # 建议把路径放进 config，比如 config.entropy_csv_path 指向 Wiki 或 C4 的 csv
-                # entropy_csv_path = "/eagle/lc-mpi/Zhendong/Basis_Sharing/entropy_token_lp.csv"
-                # if os.path.exists(entropy_csv_path):
-                #     H_layer = _load_layer_entropy_mean(entropy_csv_path)
-                #     # 两层一组：对组内层做均值后得到 m_g
-                #     m_entropy = _entropy_weights_for_groups(
-                #         groups=base_groups,
-                #         H_layer=H_layer,
-                #         gamma=0.3,          # 可在 config 里调
-                #         tail_protect_last_n=0,
-                #         last_boost=1.10
-                #     )
-                # else:
-                #     # 没提供 csv 就退化为全 1
-                #     m_entropy = np.ones(len(base_groups), dtype=np.float64)
+
 
                 
                 # #s_list = [s**0 * m for s, m in zip(s_list, m_entropy)]
@@ -1038,32 +1020,29 @@ def create_model(config):
                 dynamic_k_list = [max(1, min(max_rank, int(round(ci)))) for ci in k_cont]
 
 
-                # 步骤A: 计算每个组的“可压缩性”分数 S_i = 1 / Log(L_min)
-                # 我们的 s_list 已经是 L_min^2，为简化和稳定，我们直接使用 s_list 的倒数作为可压缩性分数
-                # （s_list越高 -> 越重要 -> 可压缩性越低）
+
                 # compressibility_scores = [score for score in s_list]
 
-                # # 步骤B: 计算分数总和
+        
                 # total_compressibility = sum(compressibility_scores)
 
-                # # 步骤C: 按“可压缩性”比例，分配总的目标参数预算 P_target_module
                 # P_orig = sum(nx * len(g) * nf for g in base_groups)
                 # P_budget = P_orig * (1 - config.compression_ratio / 100)
 
                 # k_list = []
                 # if total_compressibility > 0:
                 #     for i in range(len(base_groups)):
-                #         # 1. 计算这个组应该分到多少参数预算
+            
                 #         proportion = compressibility_scores[i] / total_compressibility
                 #         target_params_for_group = P_budget * proportion
                         
-                #         # 2. 将参数预算反算回k值 (参数 = k * 单个秩的成本)
+         
                 #         cost_per_rank = w_list[i]
                 #         k_val = target_params_for_group / cost_per_rank
                         
                 #         k_list.append(max(1, min(max_rank, int(round(k_val)))))
                 # else:
-                #     # 预防性代码：如果所有分数都为0，则按参数量均匀分配k值
+
                 #     total_w = sum(w_list)
                 #     k_list = [max(1, min(max_rank, int(round(P_budget * (w / total_w) / w)))) for w in w_list]
 
@@ -1098,9 +1077,9 @@ def create_model(config):
                     # protection_floor = int(static_k * 0.99)
                     # print(f"  Protection floor: {protection_floor}")
 
-                    #     # 2. 抬高低于下限的k值，并计算总参数“赤字” (params_deficit)
+                    #     # 2. (params_deficit)
                     # params_deficit = 0
-                    # adjusted_k_list = list(k_list) # 创建一个副本
+                    # adjusted_k_list = list(k_list) 
                     # for i, k in enumerate(adjusted_k_list):
                     #     if k < protection_floor:
                     #         params_deficit += (protection_floor - k) * w_list[i]
@@ -1108,30 +1087,30 @@ def create_model(config):
 
                     # print(f"  Initial parameter deficit after raising floors: {params_deficit}")
 
-                    #     # 3. 从高于静态k值的“富裕”层中，按比例扣除参数赤字
+                
                     # if params_deficit > 0:
                     #     donors = [(i, k) for i, k in enumerate(adjusted_k_list) if k > static_k]
                             
-                    #         # 计算总的“参数盈余”
+             
                     #     total_params_surplus = sum((k - static_k) * w_list[i] for i, k in donors)
 
                     #     if total_params_surplus > 0:
                     #         print(f"  Found {len(donors)} donor(s) with a total parameter surplus of {total_params_surplus} to cover the deficit.")
                                 
-                    #             # 按比例扣除
+                 
                     #         for i, k_donor in donors:
                     #             params_surplus_i = (k_donor - static_k) * w_list[i]
                     #             params_to_deduct = params_deficit * (params_surplus_i / total_params_surplus)
                                     
-                    #                 # 将要扣除的参数量转换回k值的减少量
+             
                     #             k_deduction = params_to_deduct / w_list[i]
                                     
-                    #                 # 扣除，并确保不低于静态k值
+               
                     #             adjusted_k_list[i] = max(static_k, int(round(k_donor - k_deduction)))
                     #     else:
                     #         print("  Warning: No donors with surplus found to cover the deficit. Final compression ratio might be lower.")
                         
-                    # k_list = adjusted_k_list # 使用调整后的k_list
+                    # k_list = adjusted_k_list 
                     # print(f"  k_list after reallocation: {k_list}")
                 else:
                     if 'gate' in name or 'up' in name or 'down' in name or 'o' in name:
@@ -1152,10 +1131,10 @@ def create_model(config):
                         idx_to_reduce = min(candidates, key=lambda i: s_list[i] / (w_list[i] + 1e-9))
                         k_list[idx_to_reduce] -= 1
                     else:
-                        # --- 【核心修正】: 只在那些k值还没有达到最大秩的组里选择 ---
+   
                         candidates = [i for i, k in enumerate(k_list) if k < max_rank]
                         if not candidates: 
-                            break # 如果所有组都已满，无法再增加，则退出
+                            break 
                         idx_to_increase = max(range(len(k_list)), key=lambda i: s_list[i] / (w_list[i] + 1e-9))
                         k_list[idx_to_increase] += 1
                 
@@ -1172,7 +1151,7 @@ def create_model(config):
 
 
 
-        # 创建 basis 模块
+
         k_basis = build_dynamic_basis_collection(model_config.k_groups, model_config.dynamic_basis_k_proj, model_config.hidden_size)
         q_basis = build_dynamic_basis_collection(model_config.q_groups, model_config.dynamic_basis_q_proj, model_config.hidden_size)
         v_basis = build_dynamic_basis_collection(model_config.v_groups, model_config.dynamic_basis_v_proj, model_config.hidden_size)
@@ -1181,7 +1160,7 @@ def create_model(config):
         gate_basis = build_dynamic_basis_collection(model_config.gate_groups, model_config.dynamic_basis_gate_proj, model_config.hidden_size)
         down_basis = build_dynamic_basis_collection(model_config.down_groups, model_config.dynamic_basis_down_proj, model_config.intermediate_size)
 
-        # 实例化模型
+
         if config.model_type == "llama2":
             model = ShareLlamaForCausalLM(model_config, k_basis, q_basis, v_basis, o_basis, up_basis, gate_basis, down_basis)
         elif config.model_type == "gpt2":
@@ -1198,7 +1177,7 @@ def create_model(config):
             matched_state_dict, _ = match_state_dict(model.state_dict(), std_model.state_dict())
             model.load_state_dict(matched_state_dict, strict=False)
 
-            # 初始化 Share Part 权重
+ 
             for name in config.share_part:
                 groups = getattr(model_config, name + "_groups")
                 ks = getattr(model_config, f"dynamic_basis_{name}_proj")
@@ -1207,7 +1186,7 @@ def create_model(config):
                     print(f"Change {name}, group {idx}, k = {ki}")
                     model = change_model(std_model, model, config.model_type, [group], getattr(config, name + "_name"), ShareConfig.weight_info[short_model_name][getattr(config, name + "_name")][1], ki, name + "_basis", config.calib_path)
 
-            # 初始化 Private Part 权重
+   
             for name in config.private_part:
                 groups = getattr(model_config, name + "_groups")
                 ks = getattr(model_config, f"dynamic_basis_{name}_proj")
