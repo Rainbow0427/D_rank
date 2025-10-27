@@ -61,12 +61,12 @@ if __name__ == '__main__':
 
   
 
-    ####如果想用c4或者ptb来压缩但是想用wikitext来计算ppl：
+
     # _, _, test_dataset, _ = prepare_data("c4", tokenizer,
     #                                               config.context_length,
     #                                               config.dataset_cache_dir)
 
-    # --- 添加结束 ---
+
     print(compute_ppl(config.context_length, config.stride, test_dataset, model, 'cuda'))
 
 
