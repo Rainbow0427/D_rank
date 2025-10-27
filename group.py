@@ -249,7 +249,7 @@ def update_model(std_model, model, model_type, groups, name, step, num_basis, ba
     
 
 #     def _init_basis_coefficient(self, std_model, s, invs):
-#         # 1. 根据模型类型取出各层原始权重切片
+
 #         if self.model_type == 'gpt2':
 #             w_slices = self._init_gpt2(std_model)
 #         elif self.model_type == "llama2":
@@ -261,24 +261,23 @@ def update_model(std_model, model, model_type, groups, name, step, num_basis, ba
 #         else:
 #             raise NotImplementedError(f"Unsupported model type: {self.model_type}")
 
-#         # 2. 确保所有张量都在同一 device 上，避免跨卡 cat/操作冲突
+
 #         target_device = w_slices[0].device
 #         w_slices = [w.to(target_device) for w in w_slices]
 #         s       = s.to(target_device)
 #         invs    = invs.to(target_device)
 
-#         # 3. 拼接权重切片、做加权 SVD
-#         #    w_cat 形状 [d1, n * d2]
+
 #         w_cat       = torch.cat(w_slices, dim=-1).double()
-#         #    加权：S @ W_cat
+
 #         w_weighted  = s @ w_cat
-#         #    SVD 分解
+
 #         u, sigma, v = torch.svd(w_weighted)
 
-#         # 4. 构建 basis 与 coefficient，并保持 float32
+
 #         #    basis = S^{-1} U Σ
 #         self.basis       = (invs @ u @ torch.diag(sigma)).float()
-#         #    coefficient 矩阵 = V^T
+
 #         self.coefficient = v.t().float()
 #         return
     
