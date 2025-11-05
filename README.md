@@ -46,9 +46,13 @@ Final output format expected to be like `tensor(7.6554, device='cuda:0')`
 
 After compress with WikiText, to test with other dataset run
 ~~~
-python test.py --cf tasks/configs/wikitext_ppl/llama/share2/share_llama_7b_20.yaml --dataset_name <ptb, C4, WikiText>
+python test.py --cf tasks/configs/wikitext_ppl/llama/share2/share_llama_7b_20.yaml --dataset_name <ptb, C4, WikiText> --dataset_cache_dir <PATH>
 ~~~
-For C4 you need to download them from [link](https://drive.google.com/drive/folders/123Id1MkZVsKySGy_sMO4RgiJKrtPcvUp?usp=drive_link). Don't forget to update `dataset_cache_dir` in config file.
+For C4 you need to download them from [link](https://drive.google.com/drive/folders/123Id1MkZVsKySGy_sMO4RgiJKrtPcvUp?usp=drive_link). 
+
+Don't forget to pass `--dataset_cache_dir` in args.
+
+Final output format expected to be like `tensor(13.9778, device='cuda:0')`
 
 ## Run LoRA
 ~~~
