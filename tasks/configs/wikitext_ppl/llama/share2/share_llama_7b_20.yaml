@@ -24,7 +24,7 @@ model_args:
 
 calibration_args:
   dataset_name: "wikitext"
-  build_calib: true
+  build_calib: false
   calib_path: "./calib/llama-7b/wikitext/"
   dataset_cache_dir: null
   calibration_size: 256

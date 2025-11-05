@@ -4,3 +4,5 @@ __pycache__/
 llm_weights/
 calib/
 untrained_model_welore/
+logs/
+datasets/

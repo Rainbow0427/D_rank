@@ -38,15 +38,17 @@ To run D rank on LLaMA-7B for generation tasks, run
 ```
 python test.py --cf tasks/configs/wikitext_ppl/llama/share2/share_llama_7b_20.yaml
 ```
-make sure to set `build_calib` as true for a model, when you want to compress it for the first time.
+make sure to set `build_calib` as `true` for a model, when you want to compress it for the first time.
 We use `tax_rate` as a hyperparameter to control the distribution of retained rank between the QK and V matrices in the attention layer.
 Specifically, it determines how much of the rank preserved in the QK matrices is transferred to the V matrix, and you can adjust this value in the function of `create_model`.
+
+Final output format expected to be like `tensor(7.6554, device='cuda:0')`
 
 After compress with WikiText, to test with other dataset run
 ~~~
 python test.py --cf tasks/configs/wikitext_ppl/llama/share2/share_llama_7b_20.yaml --dataset_name <ptb, C4, WikiText>
 ~~~
-For C4 you need to download them from [link](https://drive.google.com/drive/folders/123Id1MkZVsKySGy_sMO4RgiJKrtPcvUp?usp=drive_link). Don't forget to update *dataset_cache_dir* in config file.
+For C4 you need to download them from [link](https://drive.google.com/drive/folders/123Id1MkZVsKySGy_sMO4RgiJKrtPcvUp?usp=drive_link). Don't forget to update `dataset_cache_dir` in config file.
 
 ## Run LoRA
 ~~~
