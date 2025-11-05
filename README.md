@@ -14,7 +14,7 @@ cd D_rank
 ```
 Step 2: Create the conda environment:
 ```
-conda create -n D_rank python=3.9
+conda create -n D_rank python=3.10 -y
 conda activate D_rank
 ```
 Step 3: Install relevant packages:
