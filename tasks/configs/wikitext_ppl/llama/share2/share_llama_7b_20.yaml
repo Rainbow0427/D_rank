@@ -8,7 +8,7 @@ model_args:
   up_name: "mlp.up_proj"
   down_name: "mlp.down_proj"
   gate_name: "mlp.gate_proj"
-  group_size: 1
+  group_size: 2
   compression_ratio: 20
   context_length: 2048
   stride: 2048
@@ -24,7 +24,7 @@ model_args:
 
 calibration_args:
   dataset_name: "wikitext"
-  build_calib: false
+  build_calib: True
   calib_path: "./calib/llama-7b/wikitext/"
   dataset_cache_dir: null
   calibration_size: 256

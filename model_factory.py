@@ -1144,7 +1144,7 @@ def create_model(config):
 
         
 
-        model_config = reallocate_k_budget(model_config, tax_rate=0.2, min_k=1, max_rank=4096) #taxrate can be adjusted
+        model_config = reallocate_k_budget(model_config, tax_rate=0.3, min_k=1, max_rank=4096) #taxrate can be adjusted
   
 
 
