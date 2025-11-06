@@ -79,19 +79,19 @@ def prep_ptb(context_length, tokenizer, dataset_cache_dir=None):
 
 
 def prep_c4(context_length, tokenizer, dataset_cache_dir=None):
-    print("load C4 dataset")
-    train_raw_dataset = load_dataset("json", data_dir=dataset_cache_dir, data_files="c4-train.json")['train']
+    print(f"load C4 dataset from {dataset_cache_dir}")
+    # train_raw_dataset = load_dataset("json", data_dir=dataset_cache_dir, data_files="c4-train.json")['train']
     val_raw_dataset = load_dataset("json", data_dir=dataset_cache_dir, data_files="c4-validation.json")['train']
     test_raw_dataset = val_raw_dataset
 
  
     func_tokenize = partial(tokenize_func, tokenizer=tokenizer, content="text")
-    tokenized_train = train_raw_dataset.map(func_tokenize, num_proc=4, batched=True, remove_columns=train_raw_dataset.column_names)
+    # tokenized_train = train_raw_dataset.map(func_tokenize, num_proc=4, batched=True, remove_columns=train_raw_dataset.column_names)
     tokenized_val = val_raw_dataset.map(func_tokenize, num_proc=4, batched=True, remove_columns=val_raw_dataset.column_names)
 
  
     func_group = partial(group_text, context_length=context_length)
-    train_dataset = tokenized_train.map(func_group, num_proc=4, batch_size=2048, batched=True)
+    # train_dataset = tokenized_train.map(func_group, num_proc=4, batch_size=2048, batched=True)
     val_dataset = tokenized_val.map(func_group, num_proc=4, batch_size=2048, batched=True)
 
  
@@ -101,7 +101,8 @@ def prep_c4(context_length, tokenizer, dataset_cache_dir=None):
     data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False, return_tensors="pt")
     
 
-    return train_dataset, val_dataset, tokenized_test_data, data_collator
+    # return train_dataset, val_dataset, tokenized_test_data, data_collator
+    return None, val_dataset, tokenized_test_data, data_collator
 
 
 def prep_alpaca(context_length, tokenizer, dataset_cache_dir=None):

@@ -47,12 +47,15 @@ def compute_ppl(max_length, stride, data, model, device):
 if __name__ == '__main__':
     cmd_args = add_args()
     config = ShareConfig(cmd_args)
-    print(config.compression_ratio)
+    # print(config.compression_ratio)
+    for k, v in vars(config).items():
+        print(f"{k}: {v}")
     if config.model_type == "llama2":
         tokenizer = LlamaTokenizer.from_pretrained(config.model_name, cache_dir="llm_weights")
     else:
         tokenizer = AutoTokenizer.from_pretrained(config.model_name, cache_dir="llm_weights")
     tokenizer.pad_token = "[PAD]"
+    print(f"dataset_cache_dir : {config.dataset_cache_dir}")
     train_dataset, val_dataset, test_dataset, data_collator = prepare_data(config.dataset_name, tokenizer,
                                                                            config.context_length,
                                                                            config.dataset_cache_dir)

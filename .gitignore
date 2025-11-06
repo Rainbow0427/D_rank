@@ -1,0 +1,8 @@
+__pycache__/
+**/__pycache__/
+*.py[cod]
+llm_weights/
+calib/
+untrained_model_welore/
+logs/
+datasets/

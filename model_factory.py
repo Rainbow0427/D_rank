@@ -17,12 +17,12 @@ import random
 from prepare_data import prepare_data
 from utils import compute_num_basis
 from group import change_model, update_model
-from models.gpt2 import ShareGPT2LMHeadModel
+# from models.gpt2 import ShareGPT2LMHeadModel
 from typing import Optional
 from models.llama import ShareLlamaForCausalLM
-from models.opt import ShareOPTForCausalLM
+# from models.opt import ShareOPTForCausalLM
 from models.model_utils import build_dynamic_basis_collection
-from models.mistral import ShareMistralForCausalLM
+# from models.mistral import ShareMistralForCausalLM
 
 
 def reallocate_llama3_2(model_config, all_w_lists, all_k_lists, max_ranks, min_k=1):
@@ -1144,7 +1144,7 @@ def create_model(config):
 
         
 
-        model_config = reallocate_k_budget(model_config, tax_rate=0.2, min_k=1, max_rank=4096) #taxrate can be adjusted
+        model_config = reallocate_k_budget(model_config, tax_rate=0.3, min_k=1, max_rank=4096) #taxrate can be adjusted
   
 
 
